@@ -1,0 +1,328 @@
+const maxX=Math.max(0,innerWidth-380);
+ const maxY=Math.max(60,innerHeight-290);
+ el.style.left=Math.min(25+Math.random()*Math.max(0,maxX-25),maxX)+"px";
+ el.style.top=Math.min(100+Math.random()*Math.max(0,maxY-100),maxY)+"px";
+
+ const bar=document.createElement("div");
+ bar.className="titlebar";
+ const title=document.createElement("span");
+ title.textContent="⚠ System Error";
+
+ const actions=document.createElement("div");
+ actions.className="title-actions";
+
+ const minimize=document.createElement("button");
+ minimize.textContent="−";
+ minimize.onclick=()=>el.style.display="none";
+
+ const close=document.createElement("button");
+ close.textContent="×";
+ close.onclick=()=>removeError(e.id);
+
+ actions.append(minimize,close);
+ bar.append(title,actions);
+
+ const content=document.createElement("div");
+ content.className="win-content";
+
+ const symbol=document.createElement("div");
+ symbol.className="win-symbol";
+ symbol.textContent="!";
+
+ const copy=document.createElement("div");
+
+ const heading=document.createElement("div");
+ heading.className="win-heading";
+ heading.textContent="CRITICAL FORMAT ERROR";
+
+ const line1=document.createElement("div");
+ line1.className="win-line";
+ line1.textContent="Viewer: @"+e.user;
+
+ const line2=document.createElement("div");
+ line2.className="win-line";
+ line2.textContent="Gift: "+e.giftName;
+
+ const line3=document.createElement("div");
+ line3.className="win-line";
+ line3.textContent="The system encountered an unexpected event.";
+
+ const code=document.createElement("div");
+ code.className="win-code";
+ code.textContent="ERROR CODE: "+e.code;
+
+ copy.append(heading,line1,line2,line3,code);
+ content.append(symbol,copy);
+
+ const footer=document.createElement("div");
+ footer.className="win-footer";
+ const ok=document.createElement("button");
+ ok.textContent="OK";
+ ok.onclick=()=>removeError(e.id);
+ footer.append(ok);
+
+ el.append(bar,content,footer);
+ $("windowLayer").append(el);
+ makeDraggable(el,bar);
+}
+
+function makeDraggable(el,bar){
+ bar.addEventListener("pointerdown",ev=>{
+  if(ev.target.closest("button"))return;
+  const rect=el.getBoundingClientRect();
+  drag={
+   el,
+   x:ev.clientX,
+   y:ev.clientY,
+   left:rect.left,
+   top:rect.top
+  };
+  try{bar.setPointerCapture(ev.pointerId)}catch(e){}
+ });
+
+ bar.addEventListener("pointermove",ev=>{
+  if(!drag||drag.el!==el)return;
+  const left=drag.left+ev.clientX-drag.x;
+  const top=drag.top+ev.clientY-drag.y;
+  el.style.left=Math.max(0,Math.min(innerWidth-el.offsetWidth,left))+"px";
+  el.style.top=Math.max(45,Math.min(innerHeight-el.offsetHeight-48,top))+"px";
+ });
+
+ const stop=()=>{if(drag&&drag.el===el)drag=null};
+ bar.addEventListener("pointerup",stop);
+ bar.addEventListener("pointercancel",stop);
+}
+
+function removeError(id){
+ const index=S.errors.findIndex(e=>e.id===id);
+ if(index<0)return;
+ S.errors.splice(index,1);
+ $("win-"+id)?.remove();
+ checkWin();
+}
+
+function removeOldest(amount){
+ const removed=S.errors.splice(0,amount);
+ removed.forEach(e=>$("win-"+e.id)?.remove());
+ return removed.length;
+}
+
+function gift(name){
+ const user=username();
+ S.gifts++;
+ log("@"+user+" sent "+name);
+
+ if(name==="Rose"){
+  createError(user,"Rose");
+  toast("Rose: 1 error created");
+ }
+ if(name==="Finger Heart"){
+  for(let i=0;i<5;i++)createError(user,"Finger Heart");
+  toast("Finger Heart: 5 errors created");
+ }
+ if(name==="Confetti"){
+  const count=removeOldest(5);
+  toast("Confetti: "+count+" errors removed");
+  log("Confetti removed "+count+" errors.");
+  checkWin();
+ }
+ if(name==="Corgi"){
+  const count=S.errors.length;
+  S.errors=[];
+  $("windowLayer").replaceChildren();
+  toast("Corgi: Desktop cleared!");
+  log("Corgi cleared "+count+" errors.");
+  checkWin();
+ }
+ update();
+}
+
+function sendLikes(amount){
+ const user=username();
+ S.likes+=amount;
+ const count=Math.floor(amount/S.settings.likesPerError);
+ log("@"+user+" sent "+amount+" likes.");
+
+ for(let i=0;i<count;i++)createError(user,"Likes");
+ toast(amount+" likes received · "+count+" errors created");
+ update();
+}
+
+function randomGift(){
+ const choices=["Rose","Finger Heart","Confetti","Corgi"];
+ gift(choices[Math.floor(Math.random()*choices.length)]);
+}
+
+function clearErrors(){
+ const count=S.errors.length;
+ S.errors=[];
+ $("windowLayer").replaceChildren();
+ log("Desktop cleared. "+count+" errors removed.");
+ toast("Desktop cleared!");
+ checkWin();
+ update();
+}
+
+function update(){
+ $("wins").textContent=S.wins;
+ $("errorCount").textContent=S.errors.length;
+ $("giftCount").textContent=S.gifts;
+ $("likeCount").textContent=S.likes.toLocaleString("en-US");
+}
+
+function checkWin(){
+ clearTimeout(S.timer);
+ S.timer=null;
+ if(S.errors.length!==0)return;
+
+ S.timer=setTimeout(()=>{
+  if(S.errors.length===0){
+   S.wins++;
+   update();
+   log("WIN awarded!");
+   $("winFlash").classList.remove("show");
+   void $("winFlash").offsetWidth;
+   $("winFlash").classList.add("show");
+   sound(850,.3);
+   toast("YOU GOT A WIN!");
+  }
+ },S.settings.winDelay*1000);
+}
+
+function saveSettings(){
+ const number=(id,min,max,fallback)=>{
+  const n=Number($(id).value);
+  return Number.isFinite(n)?Math.max(min,Math.min(max,Math.floor(n))):fallback;
+ };
+
+ S.settings.winDelay=number("winDelay",1,120,10);
+ S.settings.likesPerError=number("likesPerError",1,10000,100);
+ S.settings.maxWindows=number("maxWindows",1,30,12);
+ S.settings.animations=$("animations").checked;
+
+ while(S.errors.length>S.settings.maxWindows){
+  const old=S.errors.shift();
+  $("win-"+old.id)?.remove();
+ }
+
+ document.querySelectorAll(".win").forEach(el=>{
+  el.style.animation=S.settings.animations?"":"none";
+ });
+
+ closeFlyouts();
+ update();
+ checkWin();
+ log("Settings saved.");
+ toast("Settings saved!");
+}
+
+function defaults(){
+ S.settings={
+  winDelay:10,
+  likesPerError:100,
+  maxWindows:12,
+  animations:true
+ };
+ $("winDelay").value=10;
+ $("likesPerError").value=100;
+ $("maxWindows").value=12;
+ $("animations").checked=true;
+ saveSettings();
+}
+
+function resetSession(){
+ clearTimeout(S.timer);
+ S.errors=[];
+ S.wins=0;
+ S.gifts=0;
+ S.likes=0;
+ $("windowLayer").replaceChildren();
+ update();
+ closeFlyouts();
+ log("Session reset.");
+ toast("Session restarted.");
+}
+
+async function fullscreen(){
+ try{
+  if(!document.fullscreenElement){
+   await $("desktop").requestFullscreen();
+  }else{
+   await document.exitFullscreen();
+  }
+ }catch(e){
+  toast("Fullscreen is not supported here.");
+ }
+}
+
+function showHelp(){
+ $("modalTitle").textContent="LIVE FORMAT HELP";
+ $("modalContent").innerHTML=`
+  <p><b>Welcome to LIVE FORMAT.</b></p>
+  <p>🌹 Rose: creates one error.</p>
+  <p>🫰 Finger Heart: creates five errors.</p>
+  <p>🎊 Confetti: removes up to five errors.</p>
+  <p>🐶 Corgi: clears the desktop.</p>
+  <p>❤️ Likes: create errors according to your settings.</p>
+  <p>When the desktop stays empty for the configured time, you earn a WIN.</p>
+  <p>This version uses simulated events. It is not connected to TikTok LIVE.</p>
+ `;
+ $("modalShade").classList.add("open");
+ closeFlyouts();
+}
+
+function closeModal(){
+ $("modalShade").classList.remove("open");
+}
+
+function filterApps(query){
+ const q=query.toLowerCase();
+ document.querySelectorAll(".pinned-app").forEach(app=>{
+  app.style.display=app.dataset.name.includes(q)?"flex":"none";
+ });
+
+ const results=$("searchResults");
+ if(!results)return;
+ results.replaceChildren();
+
+ const apps=[
+  ["Settings","⚙️","settingsMenu"],
+  ["Gift Simulator","🎁","testPanel"],
+  ["Activity","📋","activityPanel"]
+ ];
+
+ apps.filter(a=>a[0].toLowerCase().includes(q)).forEach(a=>{
+  const btn=document.createElement("button");
+  btn.className="action full";
+  btn.textContent=a[1]+" "+a[0];
+  btn.onclick=()=>openPanel(a[2]);
+  results.append(btn);
+ });
+}
+
+$("modalShade").addEventListener("click",ev=>{
+ if(ev.target===$("modalShade"))closeModal();
+});
+
+window.addEventListener("resize",()=>{
+ document.querySelectorAll(".win").forEach(el=>{
+  const maxX=Math.max(0,innerWidth-el.offsetWidth);
+  const maxY=Math.max(45,innerHeight-el.offsetHeight-48);
+  el.style.left=Math.min(parseFloat(el.style.left)||0,maxX)+"px";
+  el.style.top=Math.min(parseFloat(el.style.top)||45,maxY)+"px";
+ });
+});
+
+document.addEventListener("keydown",ev=>{
+ if(ev.key==="Escape"){
+  closeFlyouts();
+  closeModal();
+ }
+});
+
+update();
+log("LIVE FORMAT Windows Edition initialized.");
+checkWin();
+</script>
+</body>
+</html>
